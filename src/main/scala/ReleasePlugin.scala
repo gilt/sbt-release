@@ -25,23 +25,35 @@ object ReleasePlugin extends Plugin {
     lazy val useDefaults = AttributeKey[Boolean]("release-use-defaults")
     lazy val skipTests = AttributeKey[Boolean]("release-skip-tests")
     lazy val cross = AttributeKey[Boolean]("release-cross")
+    lazy val releaseVersionBump = AttributeKey[Option[Version.Bump]]("release-bump")
 
     private lazy val releaseCommandKey = "release"
     private val WithDefaults = "with-defaults"
     private val SkipTests = "skip-tests"
     private val CrossBuild = "cross"
     private val FailureCommand = "--failure--"
-    private val releaseParser = (Space ~> WithDefaults | Space ~> SkipTests | Space ~> CrossBuild).*
+    private val Major = "major"
+    private val Minor = "minor"
+    private val Bugfix = "bugfix"
+    private val BumpTypes = literal(Major) | literal(Minor) | literal(Bugfix)
+    private val releaseParser = (Space ~> WithDefaults | Space ~> SkipTests | Space ~> CrossBuild | Space ~> BumpTypes).*
 
     val releaseCommand: Command = Command(releaseCommandKey)(_ => releaseParser) { (st, args) =>
       val extracted = Project.extract(st)
       val releaseParts = extracted.get(releaseProcess)
       val crossEnabled = extracted.get(crossBuild) || args.contains(CrossBuild)
+      val releaseType = args.collectFirst {
+        case Major => Version.Bump.Major
+        case Minor => Version.Bump.Minor
+        case Bugfix => Version.Bump.Bugfix
+      }
+
       val startState = st
         .copy(onFailure = Some(FailureCommand))
         .put(useDefaults, args.contains(WithDefaults))
         .put(skipTests, args.contains(SkipTests))
         .put(cross, crossEnabled)
+        .put(releaseVersionBump, releaseType)
 
       val initialChecks = releaseParts.map(_.check)
 
